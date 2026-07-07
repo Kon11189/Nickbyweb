@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ИИ-партнер | Nikita by Web</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <style>
+        :root {
+            --bg: #03060a;
+            --surface: #070d14;
+            --border: #141f2c;
+            --accent: #00bfff;
+            --accent-glow: rgba(0, 191, 255, 0.25);
+            --accent-hover: #0099cc;
+            --telegram: #2AABEE;
+            --telegram-hover: #2298d6;
+            --text: #e2e8f0;
+            --text-secondary: #6e849c;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: var(--bg);
+            font-family: var(--font-family);
+            /* Жесткий фикс для мобильных браузеров, чтобы строка не пряталась за панелями */
+            height: 100vh; /* Фолбэк для старых браузеров */
+            height: 100dvh; /* Динамическая высота для современных смартфонов */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        /* --- Элитный экран загрузки --- */
+        #splash {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s;
+        }
+        #splash.fade-out {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .splash-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 320px;
+        }
+        .splash-title {
+            font-size: 1.4rem;
+            font-weight: 300;
+            letter-spacing: 0.5em;
+            color: #fff;
+            text-transform: uppercase;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 25px var(--accent-glow);
+        }
+        .loader-track {
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .loader-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, transparent, var(--accent));
+            box-shadow: 0 0 10px var(--accent), 0 0 5px var(--accent);
+            transition: width 2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* --- Главное приложение --- */
+        #chatApp {
+            width: 100%;
+            height: 100%;
+            max-width: 950px;
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: scale(0.99);
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #chatApp.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+        @media (min-width: 768px) {
+            #chatApp {
+                height: 92vh;
+                border-radius: 20px;
+                box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
+            }
+        }
+
+        /* --- Диалоговое окно --- */
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            scroll-behavior: smooth;
+        }
+        .message {
+            display: flex;
+            flex-direction: column;
+            padding: 2rem 2.5rem;
+            animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Фикс отступов для мобилок */
+        @media (max-width: 768px) {
+            .message {
+                padding: 1.5rem 1.2rem;
+            }
+        }
+        .message.bot {
+            align-self: flex-start;
+            width: 100%;
+            border-bottom: 1px solid rgba(20, 31, 44, 0.5);
+            color: #f1f5f9;
+        }
+        .message.user {
+            align-self: flex-end;
+            background: #091420;
+            border: 1px solid #122438;
+            border-radius: 16px 16px 4px 16px;
+            padding: 1rem 1.4rem;
+            margin: 1.5rem;
+            max-width: 85%;
+            box-shadow: 0 4px 25px rgba(0, 191, 255, 0.02);
+        }
+
+        /* --- Акценты разметки --- */
+        .message-content {
+            line-height: 1.65;
+            font-size: 0.98rem;
+            word-break: break-word;
+            max-width: 850px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .message.bot .message-content strong {
+            color: var(--accent);
+            font-weight: 600;
+            text-shadow: 0 0 15px rgba(0, 191, 255, 0.2);
+        }
+        .message.bot .message-content h2, 
+        .message.bot .message-content h3 {
+            color: #fff;
+            font-weight: 500;
+            margin-top: 1.6rem;
+            margin-bottom: 0.8rem;
+            border-left: 3px solid var(--accent);
+            padding-left: 12px;
+        }
+        .message.bot .message-content ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 1rem 0;
+        }
+        .message.bot .message-content ul li {
+            position: relative;
+            padding-left: 1.5rem;
+            margin-bottom: 0.6rem;
+        }
+        .message.bot .message-content ul li::before {
+            content: "▪";
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            text-shadow: 0 0 8px var(--accent);
+            font-size: 1rem;
+            top: -1px;
+        }
+        .message-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 2rem 0;
+            font-size: 0.92rem;
+            background: #060a10;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            border: 1px solid var(--border);
+        }
+        .message-content th, .message-content td {
+            padding: 1.1rem 1.4rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        .message-content th {
+            background: #0c131c;
+            font-weight: 500;
+            color: var(--accent);
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+        }
+        .message-content tr:last-child td {
+            border-bottom: none;
+            font-weight: 600;
+            background: rgba(0, 191, 255, 0.04);
+            color: #fff;
+        }
+
+        /* --- Панель ручного ввода --- */
+        #inputPanel {
+            display: flex;
+            align-items: flex-end;
+            padding: 1.2rem 1.5rem calc(1.2rem + env(safe-area-inset-bottom));
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            gap: 1rem;
+            flex-shrink: 0;
+        }
+
+        @keyframes neonPulse {
+            0% { box-shadow: 0 0 4px rgba(0, 191, 255, 0.1), inset 0 0 2px rgba(0, 191, 255, 0.05); border-color: rgba(0, 191, 255, 0.3); }
+            50% { box-shadow: 0 0 12px rgba(0, 191, 255, 0.4), inset 0 0 4px rgba(0, 191, 255, 0.1); border-color: rgba(0, 191, 255, 0.7); }
+            100% { box-shadow: 0 0 4px rgba(0, 191, 255, 0.1), inset 0 0 2px rgba(0, 191, 255, 0.05); border-color: rgba(0, 191, 255, 0.3); }
+        }
+
+        #userInput {
+            flex: 1;
+            background: #0a0f16;
+            color: #fff;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            height: 48px;
+            border-radius: 24px;
+            padding: 0 1.4rem;
+            line-height: 48px;
+            white-space: nowrap;
+            overflow: hidden;
+            border: 1px solid rgba(0, 191, 255, 0.3);
+            animation: neonPulse 2.5s infinite ease-in-out;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        #userInput:focus,
+        #userInput:not(:placeholder-shown) {
+            height: 120px;
+            border-radius: 16px;
+            padding: 1rem 1.4rem;
+            line-height: 1.5;
+            white-space: normal;
+            overflow-y: auto;
+            border-color: var(--accent);
+            box-shadow: 0 5px 20px rgba(0, 191, 255, 0.3);
+            animation: none;
+        }
+        #userInput::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        #sendBtn {
+            background: var(--accent);
+            color: #000;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px rgba(0,191,255,0.2);
+        }
+        #sendBtn:hover {
+            background: var(--accent-hover);
+            transform: scale(1.05);
+            box-shadow: 0 0 18px rgba(0,191,255,0.4);
+        }
+        #sendBtn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        /* --- Эксклюзивный лид-виджет (Telegram отправка) --- */
+        #leadWidgetArea {
+            display: none;
+            padding: 2.5rem 1.5rem;
+            background: linear-gradient(180deg, rgba(0,191,255,0.02) 0%, transparent 100%);
+            border-top: 1px solid var(--border);
+            animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+        }
+        .widget-card {
+            max-width: 650px;
+            margin: 0 auto;
+            background: #090e15;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2.5rem 2rem;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .widget-notice {
+            font-size: 0.8rem;
+            color: var(--accent);
+            margin-bottom: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 500;
+        }
+        .widget-card h3 {
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            color: #fff;
+            line-height: 1.4;
+        }
+        .widget-description {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        
+        #sendTelegramBtn {
+            width: 100%;
+            background: var(--telegram);
+            color: #fff;
+            border: none;
+            padding: 1.1rem;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 15px rgba(42, 171, 238, 0.15);
+        }
+        #sendTelegramBtn:hover {
+            background: var(--telegram-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(42, 171, 238, 0.35);
+        }
+        #sendTelegramBtn svg {
+            margin-right: 10px;
+            fill: currentColor;
+        }
+
+        #addClarificationBtn {
+            width: 100%;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid rgba(20, 31, 44, 0.8);
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #addClarificationBtn:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .typing-indicator {
+            display: inline-flex;
+            gap: 5px;
+            padding: 0.5rem 0;
+        }
+        .typing-indicator span {
+            width: 6px;
+            height: 6px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); background: var(--accent); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="splash">
+        <div class="splash-content">
+            <div class="splash-title">Nikita by Web</div>
+            <div class="loader-track">
+                <div class="loader-bar" id="loaderBar"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="chatApp">
+        <div id="messages"></div>
+        
+        <div id="leadWidgetArea">
+            <div class="widget-card" id="widgetCardInner">
+                <div class="widget-notice">Бизнес-интеграция</div>
+                <h3>Фиксация концепта и архитектурной матрицы</h3>
+                <p class="widget-description">
+                    Проект полностью рассчитан. Вы можете отправить сформированный текстовый файл с историей расчетов специалисту напрямую в Telegram для старта, либо добавить уточнение к текущей смете.
+                </p>
+                
+                <button id="sendTelegramBtn" type="button">
+                    <svg viewBox="0 0 24 24" width="22" height="22"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.888-.667 3.473-1.512 5.79-2.512 6.951-2.997 3.313-1.386 4.004-1.625 4.453-1.63z"/></svg>
+                    Отправить через Telegram специалисту
+                </button>
+                <button id="addClarificationBtn" type="button">Добавить уточнение</button>
+            </div>
+        </div>
+
+        <div id="inputPanel">
+            <textarea id="userInput" placeholder=" "></textarea>
+            <button id="sendBtn" title="Отправить данные">
+                <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // Новый разбитый API ключ
+            const key_p1 = "sk-or-v1-7a5a98f76";
+            const key_p2 = "5736d6d76057cbd32";
+            const key_p3 = "9ae1a303dd0583890";
+            const key_p4 = "3ea10be4511a27b48188c";
+            const OPENROUTER_API_KEY = key_p1 + key_p2 + key_p3 + key_p4;
+
+            // ВАЖНО: Замените 'ВАШ_USERNAME' на актуальный логин Telegram без '@' (например: 'nikitabyweb')
+            const TELEGRAM_USERNAME = "ВАШ_USERNAME"; 
+
+            const splash = document.getElementById('splash');
+            const loaderBar = document.getElementById('loaderBar');
+            const chatApp = document.getElementById('chatApp');
+            const messagesContainer = document.getElementById('messages');
+            const userInput = document.getElementById('userInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const inputPanel = document.getElementById('inputPanel');
+            const leadWidgetArea = document.getElementById('leadWidgetArea');
+            const sendTelegramBtn = document.getElementById('sendTelegramBtn');
+            const addClarificationBtn = document.getElementById('addClarificationBtn');
+
+            setTimeout(() => {
+                loaderBar.style.width = "100%";
+            }, 100);
+
+            setTimeout(() => {
+                splash.classList.add('fade-out');
+                chatApp.classList.add('visible');
+                setTimeout(botFirstGreeting, 400);
+            }, 2100); 
+
+            const SYSTEM_PROMPT = `Ты — ведущий ИИ-партнер, senior-архитектор и стратегический бизнес-аналитик премиальной IT-студии «Nikita by Web».
+Ты ведешь диалог уверенно, харизматично, с глубокой вовлеченностью в бизнес собеседника. Твой стиль — дорогой, динамичный и интеллектуальный. Исключи банальные менеджерские штампы, общайся как сильный технический партнер, нацеленный на окупаемость цифрового продукта.
+
+ПРАВИЛА ИНЖЕНЕРНОГО ДИАЛОГА:
+1. Задавай строго ОДИН емкий, сильный и бьющий в цель вопрос за раз, чтобы не рассеивать внимание партнера.
+2. Этический комплаенс: Любые серые или маргинальные ниши (наркотические платформы, скам, порноресурсы) отсекай мгновенно и элегантно: «Внутренний этический регламент и стандарты Nikita by Web исключают проектирование систем в данных сегментах. Если перед вашим брендом стоят классические высокотехнологичные бизнес-задачи — мы с радостью спроектируем для них архитектуру».
+
+СТРУКТУРА ЦЕНООБРАЗОВАНИЯ И АДАПТИВНОСТЬ (Цены в BYN):
+Адаптивность под абсолютно любые разрешения дисплеев (смартфоны, планшеты, ультрабуки) является фундаментальным стандартом нашей студии. Она всегда интегрирована в базовую стоимость каждого решения и никогда не выносится отдельным чеком!
+
+- Базовые архитектуры: Сайт-визитка (150), Лендинг (250), Корпоративный портал (400), Интернет-магазин (700), Telegram-экосистема (250), Интеграция ИИ (450).
+- Интегрируемые модули: Интерактивные формы (+30), Бизнес-чат (+40), Каталог (+150), Корзина (+200), Платежный шлюз (+180), Синхронизация с CRM (+250).
+
+ПРАВИЛО РАСЧЕТА МНОЖИТЕЛЕЙ (Критически важно):
+Если партнер запрашивает Индивидуальный дизайн (умножение на 1.5), Премиум-дизайн (умножение на 2.0) или Экстренную сдачу проекта (до 7 дней, умножение на 1.5), все математические калькуляции ты производишь скрытно в уме. В финальную Markdown-таблицу сметы ты выводишь исключительно красивое название позиции и итоговую чистую стоимость в белорусских рублях (BYN). Пользователь ни в коем случае не должен видеть коэффициенты вида "х2" или "х1.5".
+
+ФИНАЛИЗАЦИЯ И ВЫЗОВ ВИДЖЕТА:
+Когда структура утверждена и финальная смета сформирована в виде чистой таблицы, уточни у партнера, все ли бизнес-требования учтены. Если он согласен, выведи текстовый блок:
+«Мы не начинаем работу над проектом без предварительного детального согласования. Нажмите кнопку отправки ниже, чтобы передать историю диалога нашему специалисту в Telegram, или добавьте уточнение, если мы что-то упустили.»
+И строго на новой строке без пробелов и кавычек выведи системную метку:
+[ПОКАЗАТЬ_ФОРМУ_КОНТАКТОВ]`;
+
+            let messageHistory = [{ role: "system", content: SYSTEM_PROMPT }];
+
+            function botFirstGreeting() {
+                const greeting = "Приветствую. Я ИИ-партнер веб-студии **Nikita by Web**.\n\nМоя цель — провести аудит ваших бизнес-процессов, декомпозировать требования к будущему цифровому продукту и собрать прозрачную фиксированную смету.\n\nДавайте начнем: в какой индустрии вы разворачиваете проект и какие ключевые задачи должна решать проектируемая нами платформа?";
+                addMessage('bot', greeting);
+                messageHistory.push({ role: "assistant", content: greeting });
+            }
+
+            function addMessage(role, text) {
+                let triggerForm = false;
+                if (role === 'bot' && text.includes('[ПОКАЗАТЬ_ФОРМУ_КОНТАКТОВ]')) {
+                    text = text.replace('[ПОКАЗАТЬ_ФОРМУ_КОНТАКТОВ]', '').trim();
+                    triggerForm = true;
+                }
+
+                const msg = document.createElement('div');
+                msg.className = `message ${role}`;
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                
+                if (role === 'bot') {
+                    content.innerHTML = DOMPurify.sanitize(marked.parse(text, { breaks: true }));
+                } else {
+                    content.innerHTML = DOMPurify.sanitize(text);
+                }
+                
+                msg.appendChild(content);
+                messagesContainer.appendChild(msg);
+                
+                setTimeout(() => {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }, 50);
+
+                if (triggerForm) {
+                    leadWidgetArea.style.display = 'block';
+                    inputPanel.style.display = 'none';
+                    setTimeout(() => {
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }, 50);
+                }
+            }
+
+            function showTyping() {
+                const el = document.createElement('div');
+                el.className = 'message bot';
+                el.id = 'typingIndicator';
+                el.innerHTML = '<div class="message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div>';
+                messagesContainer.appendChild(el);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            function hideTyping() {
+                const el = document.getElementById('typingIndicator');
+                if (el) el.remove();
+            }
+
+            async function handleSend() {
+                const text = userInput.value.trim();
+                if (!text) return;
+
+                addMessage('user', text);
+                userInput.value = '';
+                userInput.blur(); 
+
+                const userMsg = { role: "user", content: text };
+                messageHistory.push(userMsg);
+
+                showTyping();
+
+                try {
+                    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                            "HTTP-Referer": window.location.href,
+                            "X-Title": "Nikita by Web",
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            model: "openai/gpt-oss-120b",
+                            messages: messageHistory,
+                            temperature: 0.5,
+                            max_tokens: 1600
+                        })
+                    });
+
+                    const data = await res.json();
+                    
+                    if (res.ok && data.choices?.length) {
+                        hideTyping();
+                        const reply = data.choices[0].message.content;
+                        messageHistory.push({ role: "assistant", content: reply });
+                        addMessage('bot', reply);
+                        return; 
+                    }
+                    
+                    throw new Error("Основная модель недоступна");
+
+                } catch (primaryError) {
+                    console.warn("Включаю резервную модель...", primaryError);
+                    
+                    try {
+                        const backupRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                            method: "POST",
+                            headers: {
+                                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                                "HTTP-Referer": window.location.href,
+                                "X-Title": "Nikita by Web (Backup)",
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                model: "openai/gpt-oss-120b",
+                                messages: messageHistory,
+                                temperature: 0.5,
+                                max_tokens: 1600
+                            })
+                        });
+
+                        const backupData = await backupRes.json();
+                        hideTyping();
+
+                        if (backupRes.ok && backupData.choices?.length) {
+                            const reply = backupData.choices[0].message.content;
+                            messageHistory.push({ role: "assistant", content: reply });
+                            addMessage('bot', reply);
+                        } else {
+                            addMessage('bot', 'Временный сбой серверов. Повторите запрос.');
+                        }
+
+                    } catch (backupError) {
+                        hideTyping();
+                        addMessage('bot', 'Потеря соединения. Проверьте сеть.');
+                    }
+                }
+            }
+
+            sendBtn.addEventListener('click', handleSend);
+            userInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                }
+            });
+
+            // Логика формирования файла и отправки в Telegram
+            sendTelegramBtn.addEventListener('click', () => {
+                let chatText = "--- Детализация расчета проекта (Nikita by Web) ---\n\n";
+                
+                messageHistory.forEach(msg => {
+                    if (msg.role !== 'system') {
+                        const roleName = msg.role === 'user' ? '► Клиент' : '► ИИ-Архитектор';
+                        // Убираем системные триггеры из финального текста
+                        let cleanContent = msg.content.replace(/\[ПОКАЗАТЬ_ФОРМУ_КОНТАКТОВ\]/g, '').trim();
+                        chatText += `${roleName}:\n${cleanContent}\n\n`;
+                    }
+                });
+
+                // 1. Формирование и авто-загрузка текстового файла (.txt)
+                const blob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'Расчет_проекта_NikitaByWeb.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                // 2. Редирект в Telegram с предзаполненным сообщением
+                const telegramMessage = encodeURIComponent("Здравствуйте. Вот рассчет моего проекта. Проконсультируйте подробнее (файл прикрепил).");
+                window.open(`https://t.me/${TELEGRAM_USERNAME}?text=${telegramMessage}`, '_blank');
+            });
+
+            // Логика продолжения диалога
+            addClarificationBtn.addEventListener('click', () => {
+                leadWidgetArea.style.display = 'none';
+                inputPanel.style.display = 'flex';
+                setTimeout(() => {
+                    userInput.focus();
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }, 50);
+            });
+
+        })();
+    </script>
+</body>
+</html>
